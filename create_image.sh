@@ -497,11 +497,15 @@ fi
 # @author: Pedro Rigolin
 echo "Auto restore image status: $SET_AUTO_RESTORE"
 
+AUTO_RESTORE_CONTENT=""
+
 # If auto restore is enabled, show the embed file details
 # @author: Pedro Rigolin
 if [ "$SET_AUTO_RESTORE" = true ]; then
 
-	echo "Auto restore content: $EMBED_FILE_CHECKSUM $EMBED_FILE_NAME"
+	AUTO_RESTORE_CONTENT="$EMBED_FILE_CHECKSUM $EMBED_FILE_NAME"
+
+	echo "Auto restore content: $AUTO_RESTORE_CONTENT"
 
 fi
 
@@ -511,7 +515,7 @@ fi
 #
 # @author: Pedro Rigolin
 echo "Creating auto_restore.flag"
-echo "${EMBED_FILE_CHECKSUM} ${EMBED_FILE_NAME}" > "${TEMP_DIR}/auto_restore.flag"
+echo "${AUTO_RESTORE_CONTENT}" > "${TEMP_DIR}/auto_restore.flag"
 
 echo "Copying board support package blobs into bsp directory"
 cp "${DIST_PATH}/uboot.img" "${TEMP_DIR}/bsp/uboot.img"
