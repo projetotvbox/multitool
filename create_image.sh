@@ -427,7 +427,7 @@ echo "- Original Multitool Repository (Paolo Sabatino):" >> "${CREDITS_FILE}"
 echo "  https://github.com/paolosabatino/multitool" >> "${CREDITS_FILE}"
 echo "" >> "${CREDITS_FILE}"
 echo "- Projeto TVBox Fork Repository:" >> "${CREDITS_FILE}"
-echo "  [LINK FUTURO]" >> "${CREDITS_FILE}"
+echo "  https://github.com/projetotvbox/multitool" >> "${CREDITS_FILE}"
 echo "===========================================================================" >> "${CREDITS_FILE}"
 echo "" >> "${CREDITS_FILE}"
 
