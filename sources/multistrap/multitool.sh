@@ -678,7 +678,7 @@ function set_auto_restore() {
 
     local MENU_TITLE="Choose a backup image for next boot or Unset"
 
-    local MENU_CMD=(dialog --backtitle "$BACKTITLE" --title "$TITLE" --menu "$MENU_TITLE" 24 0 18)
+    local MENU_CMD=(dialog --backtitle "$BACKTITLE" --title "$TITLE" --menu "\n$MENU_TITLE" 24 0 18)
 
     # Display the menu and capture user choice
     CHOICE=$("${MENU_CMD[@]}" "${STR_FILES[@]}" 2>&1 >$TTY_CONSOLE)
@@ -723,8 +723,12 @@ function set_auto_restore() {
 
         fi
 
+        inform "\nCalculating checksum of the selected backup file, please wait..."
+
+        local BACKUP_FILE_SHA256=$(sha256sum "$RESTORE_SOURCE" | awk '{print $1}')
+
         # Write the selected backup filename to the flag file
-        echo -n "$BACKUP_FILENAME" > "${MOUNT_POINT}/auto_restore.flag"
+        printf "%s\n%s" "$BACKUP_FILENAME" "$BACKUP_FILE_SHA256" > "${MOUNT_POINT}/auto_restore.flag"
 
         inform_wait "Auto-restore set to: $BACKUP_FILENAME\n\nIt will be restored on the next boot."
 
@@ -747,6 +751,8 @@ function set_auto_restore() {
 # @author Pedro Rigolin
 # @return 0 on success, 1 on error, 3 if no suitable device
 function do_auto_restore() {
+
+    inform "\nInitializing automatic restore process, please wait..."
 
     # Mount the multitool partition
     mount_mt_partition
@@ -774,7 +780,10 @@ function do_auto_restore() {
     
     fi
 
-    BACKUP_FILENAME=$(cat "${MOUNT_POINT}/auto_restore.flag" | xargs)
+    # BACKUP_FILENAME=$(cat "${MOUNT_POINT}/auto_restore.flag" | xargs)
+
+    local BACKUP_FILENAME=$(sed -n '1p' "${MOUNT_POINT}/auto_restore.flag")
+    local BACKUP_FILE_SHA256=$(sed -n '2p' "${MOUNT_POINT}/auto_restore.flag")    
 
     if [ -z "$BACKUP_FILENAME" ]; then
 
@@ -806,6 +815,20 @@ function do_auto_restore() {
     if [ "$BACKUP_FILE_FORMAT" != "gzip" ]; then
 
         inform_wait "The auto-restore file (${BACKUP_FILENAME}) is not in gzip format, auto-restore cannot continue"
+        
+        # Ensure data is written and unmount the partition
+        sync
+        unmount_mt_partition
+
+        return 1
+
+    fi
+
+    local TARGET_BACKUP_SHA256=$(sha256sum "${MOUNT_POINT}/backups/${BACKUP_FILENAME}" | awk '{print $1}')
+
+    if [ "$BACKUP_FILE_SHA256" != "$TARGET_BACKUP_SHA256" ]; then
+
+        inform_wait "The auto-restore file (${BACKUP_FILENAME}) checksum does not match the expected value, auto-restore cannot continue"
         
         # Ensure data is written and unmount the partition
         sync
@@ -883,7 +906,11 @@ function do_auto_restore() {
 
     # Ensure data is written and unmount the partition
     sync
+    sleep 1
     unmount_mt_partition
+
+    # Restore operation is done, set LED state back to timer
+    set_led_state "timer"
 
     # Check if the restore operation was successful
     if [ $ERR -ne 0 ]; then
@@ -1401,7 +1428,7 @@ function do_erase_mmc() {
                 return 2 # No backup device, user cancelled?
         fi
 
-        BASENAME=$(basename $ERASE_DEVICE)
+    BASENAME=$(basename $ERASE_DEVICE)
     BLK_DEVICE=$(get_block_device $ERASE_DEVICE)
     DEVICENAME=$(echo $BASENAME | cut -d ":" -f 1)
 
@@ -1539,6 +1566,11 @@ function do_reboot() {
 
     sleep 1
 
+    echo none > "$WORK_LED/trigger"
+    echo 0 > "$WORK_LED/brightness"
+
+    sleep 1    
+
     echo b > /proc/sysrq-trigger
 
 }
@@ -1550,7 +1582,11 @@ function do_shutdown() {
 
     sleep 1
 
+    echo none > "$WORK_LED/trigger"
     echo 0 > "$WORK_LED/brightness"
+
+    sleep 1
+
     echo o > /proc/sysrq-trigger
 
 }
@@ -1598,7 +1634,7 @@ FLAG_FILE="${MOUNT_POINT}/auto_restore.flag"
 if [ -f "$FLAG_FILE" ]; then
 
     # Read the flag contents and remove whitespace
-    FLAG_CONTENTS=$(cat "$FLAG_FILE" | xargs)
+    FLAG_CONTENTS=$(sed -n '1p' "${FLAG_FILE}")
 
     # Check if the content is not empty
     if [ -n "$FLAG_CONTENTS" ]; then
