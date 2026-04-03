@@ -20,6 +20,12 @@ CURRENT_STAGE="startup"
 LAST_CMD_STATUS=""
 LAST_CMD_TEXT=""
 
+#------------------------------------------------------------------------------
+# Function: show_error
+# Description: Shows a blocking error dialog, logs the error context, and exits.
+# Parameters: $1=error_message, $2=optional_status_code_for_log
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function show_error() {
 
     local explicit_status="$2"
@@ -36,6 +42,12 @@ function show_error() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: show_wait
+# Description: Updates current stage and shows a non-blocking progress dialog.
+# Parameters: $1=stage_or_progress_message
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function show_wait(){
 
     log_stage "$1"
@@ -47,6 +59,12 @@ function show_wait(){
 
 }
 
+#------------------------------------------------------------------------------
+# Function: show_info
+# Description: Shows an informational blocking dialog requiring user acknowledgment.
+# Parameters: $1=information_message
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function show_info() {
 
     dialog \
@@ -57,6 +75,12 @@ function show_info() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: show_warning
+# Description: Shows a warning dialog for non-fatal events.
+# Parameters: $1=warning_message
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function show_warning() {
 
     dialog \
@@ -67,6 +91,12 @@ function show_warning() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: log_write
+# Description: Writes a timestamped structured line to LOG_FILE when available.
+# Parameters: $1=level, $2=message
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function log_write() {
 
     local level="$1"
@@ -80,6 +110,12 @@ function log_write() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: log_stage
+# Description: Updates CURRENT_STAGE and logs a stage transition.
+# Parameters: $1=stage_name
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function log_stage() {
 
     CURRENT_STAGE="$1"
@@ -87,6 +123,12 @@ function log_stage() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: log_error
+# Description: Logs an error entry bound to CURRENT_STAGE and status code.
+# Parameters: $1=error_message, $2=optional_status_code
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function log_error() {
 
     local message="$1"
@@ -96,6 +138,12 @@ function log_error() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: log_vars
+# Description: Logs scoped variable snapshots for debugging and traceability.
+# Parameters: $1=scope, $2..$n=details_key_value_pairs
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function log_vars() {
 
     local scope="$1"
@@ -106,6 +154,13 @@ function log_vars() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: run_logged
+# Description: Executes command with logging of text, output markers, and exit.
+# Parameters: $@=command_and_arguments
+# Returns: command_exit_status
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function run_logged() {
 
     local status
@@ -129,6 +184,13 @@ function run_logged() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: run_logged_capture
+# Description: Executes command, captures stdout in a variable, and logs status.
+# Parameters: $1=destination_var_name, $2..$n=command_and_arguments
+# Returns: command_exit_status
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function run_logged_capture() {
 
     local output_var="$1"
@@ -160,6 +222,13 @@ function run_logged_capture() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: run_logged_to_file
+# Description: Executes command with stdout redirected to file and full logging.
+# Parameters: $1=destination_file, $2..$n=command_and_arguments
+# Returns: command_exit_status
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function run_logged_to_file() {
 
     local dest_file="$1"
@@ -186,6 +255,11 @@ function run_logged_to_file() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: rotate_logs
+# Description: Keeps the 10 newest build logs and removes older log files.
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function rotate_logs() {
 
     local files=()
@@ -206,6 +280,12 @@ function rotate_logs() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: init_logs
+# Description: Initializes log directory/file and applies log retention policy.
+# Returns: 0=success, 1=initialization_failure
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function init_logs() {
 
     local run_timestamp
@@ -234,6 +314,12 @@ function init_logs() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: log_summary
+# Description: Writes final build summary fields (status, image, duration, UUIDs).
+# Parameters: $1=final_status
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function log_summary() {
 
     local status="$1"
@@ -250,6 +336,48 @@ function log_summary() {
     if [ -n "$FAT_PARTITION_PARTUUID" ]; then
         log_write "SUMMARY" "fat_partuuid: $FAT_PARTITION_PARTUUID"
     fi
+
+}
+
+#------------------------------------------------------------------------------
+# Function: generate_checksum
+# Description: Builds checksum metadata for auto-restore validation payload.
+# Strategy: full SHA256 for small files; sampled hashes for large files.
+# Parameters: $1=file_path
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
+function generate_checksum() {
+
+    local FILE="$1"
+    local FILE_SIZE=$(stat -c%s "$FILE")
+    local FILE_SIZE_MB=$(( $FILE_SIZE / 1048576 ))
+
+    # Full checksum for files under 500MB
+    if [ $FILE_SIZE_MB -lt 500 ]; then
+
+        local MODE="full"
+        local FULL_HASH=$(sha256sum "$FILE" | awk '{print $1}')
+
+        printf "%s\n%s\n%s" "$FILE_SIZE" "$MODE" "$FULL_HASH"
+        return 0
+
+    fi
+
+    # Partial checksum for files 500MB and above
+    local MODE="partial"
+    local SAMPLE_MB=100
+
+    # For very large files (>3GB), increase sample size
+    [ $FILE_SIZE_MB -gt 3072 ] && SAMPLE_MB=200
+
+    local MID_OFFSET=$(( ($FILE_SIZE_MB / 2) - ($SAMPLE_MB / 2) ))
+
+    local HEAD_HASH=$(head -c ${SAMPLE_MB}M "$FILE" | sha256sum | awk '{print $1}')
+    local TAIL_HASH=$(tail -c ${SAMPLE_MB}M "$FILE" | sha256sum | awk '{print $1}')
+    local MID_HASH=$(dd if="$FILE" bs=1M skip=$MID_OFFSET count=$SAMPLE_MB 2>/dev/null | sha256sum | awk '{print $1}')
+
+    printf "%s\n%s\n%s\n%s\n%s\n%s" "$FILE_SIZE" "$MODE" "$SAMPLE_MB" "$HEAD_HASH" "$TAIL_HASH" "$MID_HASH"
+    return 0
 
 }
 
@@ -271,6 +399,13 @@ LOOP_DEVICES=()
 
 MOUNTED_POINTS=()
 
+#------------------------------------------------------------------------------
+# Function: cleanup
+# Description: Best-effort cleanup for mounts, loop devices, and temp paths.
+# Side Effects: unmounts tracked mount points, detaches tracked loop devices,
+#               removes tracked temporary directories.
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function cleanup() {
 
     log_write "INFO" "cleanup started"
@@ -316,6 +451,13 @@ function cleanup() {
 
 trap cleanup EXIT
 
+#------------------------------------------------------------------------------
+# Function: mount_device
+# Description: Mounts a device/path into a mount point and tracks it for cleanup.
+# Parameters: $1=device_or_partition, $2=mount_point
+# Returns: mount command exit status
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function mount_device() {
 
     local device="$1"
@@ -332,6 +474,13 @@ function mount_device() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: unmount_device
+# Description: Unmounts a tracked mount point when currently mounted.
+# Parameters: $1=mount_point
+# Returns: umount command exit status when executed, otherwise 0
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function unmount_device() {
 
     local device="$1"
@@ -357,6 +506,13 @@ function unmount_device() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: attach_loop
+# Description: Attaches an image file to a free loop device and tracks it.
+# Parameters: $1=image_file_path
+# Returns: 0 on success, non-zero on failure
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function attach_loop() {
 
     local file="$1"
@@ -376,6 +532,13 @@ function attach_loop() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: detach_loop
+# Description: Detaches a loop device if present and removes it from tracking.
+# Parameters: $1=loop_device_path
+# Returns: losetup detach exit status when executed, otherwise 0
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function detach_loop() {
 
     local loop="$1"
@@ -497,6 +660,127 @@ else
 
 fi
 
+EMBEDDED_IMAGE=""
+log_stage "embedded-image-selection"
+
+# Embedded image selection state machine.
+# Author: Pedro Rigolin
+#
+# Flow summary:
+# 1) First screen (no file selected yet):
+#    - Yes  => open Zenity file picker
+#    - No   => continue build without embedded image
+# 2) Second screen (file already selected):
+#    - Yes  => proceed with current selection
+#    - No   => reset selection and return to first screen
+#
+# The loop only exits in two valid terminal states:
+# - User chooses to skip embedding (no file selected + press No)
+# - User confirms the selected file (file selected + press Yes)
+while true; do
+
+    HAS_EMBEDDED_IMAGE=1
+    YES_LABEL="Select file"
+    NO_LABEL="Skip"
+    YESNO="\nDo you want to embed an additional gz image into the backup folder?"
+    HEIGHT=10
+    WIDTH=60
+
+    # If a file is already selected, switch dialog semantics from
+    # "select or skip" to "proceed or reset" and expand dialog size
+    # to better display the full selected path.
+    if [ -n "$EMBEDDED_IMAGE" ]; then
+        YES_LABEL="Proceed"
+        NO_LABEL="Reset"
+        YESNO="\nCurrently selected embedded image:\n\n$EMBEDDED_IMAGE\n\nDo you want to proceed?"
+        HAS_EMBEDDED_IMAGE=0
+        HEIGHT=12
+        WIDTH=70
+    fi
+
+    log_vars "embedded-image-dialog" "current_selection=${EMBEDDED_IMAGE:-none} has_embedded_image=$HAS_EMBEDDED_IMAGE"
+
+    dialog \
+        --backtitle "$BACKTITLE" \
+        --title " Embedded Image " \
+        --yes-label "$YES_LABEL" \
+        --no-label "$NO_LABEL" \
+        --yesno "$YESNO" $HEIGHT $WIDTH
+
+    DIALOG_RC=$?
+    log_vars "embedded-image-dialog" "dialog_rc=$DIALOG_RC yes_label=$YES_LABEL no_label=$NO_LABEL"
+
+    # Case A: User pressed Yes and there is no selected file yet.
+    # Open file picker and validate that the chosen file is a valid .gz.
+    if [ "$DIALOG_RC" -eq 0 ] && [ "$HAS_EMBEDDED_IMAGE" -eq 1 ]; then
+
+        EMBEDDED_IMAGE=$(zenity --file-selection --title="Select gz image to embed in backup folder" --file-filter="*.gz" 2>/dev/null)
+        log_vars "embedded-image-selection" "zenity_selected=${EMBEDDED_IMAGE:-none}"
+
+        # If user picked a file, perform a lightweight gzip integrity check.
+        # On failure, show error and force a new selection cycle.
+        if [ -n "$EMBEDDED_IMAGE" ]; then
+
+            run_logged pigz -l "$EMBEDDED_IMAGE"
+
+            if [ $? -ne 0 ]; then
+
+                log_write "WARNING" "invalid embedded image selected: $EMBEDDED_IMAGE"
+                show_error "The selected file is not a valid gz file"
+
+                EMBEDDED_IMAGE=""
+
+            fi
+
+        fi
+
+    # Case B: User pressed No while a file is already selected.
+    # This means "Reset" in this state, so clear selection and loop again.
+    elif [ "$DIALOG_RC" -ne 0 ] && [ "$HAS_EMBEDDED_IMAGE" -eq 0 ]; then
+
+        log_write "INFO" "embedded image selection reset by user"
+        EMBEDDED_IMAGE=""
+
+    # Case C: terminal conditions.
+    # - No selected file + No pressed => continue without embedded image.
+    # - Selected file + Yes pressed   => continue with selected image.
+    else
+
+        log_vars "embedded-image-selection" "final_selection=${EMBEDDED_IMAGE:-none}"
+        break
+
+    fi
+
+done
+
+AUTO_RESTORE_ENABLED=1
+log_vars "auto-restore" "default_enabled=$AUTO_RESTORE_ENABLED"
+
+# Auto-restore toggle for embedded image workflow.
+# Default value is 1 (disabled/no) to keep a safe behavior when:
+# - there is no embedded image selected, or
+# - the prompt is skipped/cancelled for any reason.
+if [ -n "$EMBEDDED_IMAGE" ]; then
+
+    # Ask whether the generated image should boot with auto-restore enabled.
+    # If enabled, Multitool will automatically restore the latest backup from
+    # the NTFS partition to the target eMMC on startup.
+    dialog \
+        --backtitle "$BACKTITLE" \
+        --title " Auto restore " \
+        --yes-label "Yes" \
+        --no-label "No" \
+        --yesno "\nDo you want to enable auto-restore for this image?\n\nThis will automatically restore the latest backup found in the NTFS partition to the device's eMMC when the image is booted." 12 70
+
+    # Store dialog return code directly:
+    # 0 = Yes (enable auto-restore)
+    # 1 = No  (keep disabled)
+    # 255 = Esc/Cancel (treated as disabled by downstream checks)
+    AUTO_RESTORE_ENABLED=$?
+    log_vars "auto-restore" "dialog_rc=$AUTO_RESTORE_ENABLED embedded_image=$EMBEDDED_IMAGE"
+
+fi
+
 # Target-specific sources path
 TS_SOURCES_PATH="$CWD/sources/${BOARD_NAME}"
 
@@ -549,7 +833,44 @@ cd "$CWD"
 
 show_wait "Creating empty image in $DEST_IMAGE"
 
-run_logged fallocate -l 512M "$DEST_IMAGE"
+# Define the base image size in Megabytes, same as the original script
+# @author: Pedro Rigolin
+BASE_SIZE_MB=512
+
+# Convert the base size to Kilobytes for calculations
+# @author: Pedro Rigolin
+BASE_SIZE_KB=$((BASE_SIZE_MB * 1024))
+
+# Add an extra security buffer (e.g.: 50MB) to ensure everything fits
+# @author: Pedro Rigolin
+BUFFER_KB=51200
+
+# Initialize the size of the file to be embedded as zero
+# @author: Pedro Rigolin
+EMBED_FILE_SIZE_KB=0
+EMBED_FILE_PRESENT="no"
+EMBED_FILE_NAME="none"
+
+# If the user specified a file to embed...
+# @author: Pedro Rigolin
+if [ -n "$EMBEDDED_IMAGE" ]; then
+
+    # ...calculate its size in Kilobytes
+    # @author: Pedro Rigolin
+    EMBED_FILE_SIZE_KB=$(du "$EMBEDDED_IMAGE" | cut -f 1)
+    EMBED_FILE_PRESENT="yes"
+    EMBED_FILE_NAME="$(basename "$EMBEDDED_IMAGE")"
+    log_vars "embedded-image" "embed_file=$EMBEDDED_IMAGE embed_file_size_kb=$EMBED_FILE_SIZE_KB"
+
+fi
+
+# Calculate the final image size by adding base + embedded file + buffer
+# @author: Pedro Rigolin
+FINAL_IMAGE_SIZE_KB=$((BASE_SIZE_KB + EMBED_FILE_SIZE_KB + BUFFER_KB))
+log_vars "image-size" "base_size_mb=$BASE_SIZE_MB base_size_kb=$BASE_SIZE_KB buffer_kb=$BUFFER_KB embed_file_present=$EMBED_FILE_PRESENT embed_file_name=$EMBED_FILE_NAME embed_file_size_kb=$EMBED_FILE_SIZE_KB final_image_size_kb=$FINAL_IMAGE_SIZE_KB"
+
+# Create the image with the calculated final size (using 'K' for Kilobytes)
+run_logged fallocate -l ${FINAL_IMAGE_SIZE_KB}K "$DEST_IMAGE"
 
 if [ $? -ne 0 ]; then
 
@@ -754,6 +1075,42 @@ if [ $? -ne 0 ]; then
 
 fi
 
+# ===============================================================
+# CREATING A CREDITS AND LICENSE FILE INDICATING THAT
+# MODIFICATIONS WERE MADE TO THE ORIGINAL SOFTWARE FOR THE TVBOX PROJECT
+# ===============================================================
+
+# Define the path of the new file inside the image
+CREDITS_FILE="${TEMP_DIR}/CREDITS"
+
+# Get current system date and time
+BUILD_DATE=$(date)
+
+# 1. Create the NEW file and write the modification header first.
+echo "===========================================================================" > "${CREDITS_FILE}"
+echo "This software has been modified by Pedro Rigolin for the TVBox Project" >> "${CREDITS_FILE}"
+echo "at the Instituto Federal de São Paulo - IFSP, Salto campus." >> "${CREDITS_FILE}"
+echo "" >> "${CREDITS_FILE}"
+echo "TVBox Project Mod Version: 1.0" >> "${CREDITS_FILE}"
+echo "Build Date: ${BUILD_DATE}" >> "${CREDITS_FILE}"
+echo "" >> "${CREDITS_FILE}"
+echo "- Original Multitool Repository (Paolo Sabatino):" >> "${CREDITS_FILE}"
+echo "  https://github.com/paolosabatino/multitool" >> "${CREDITS_FILE}"
+echo "" >> "${CREDITS_FILE}"
+echo "- Projeto TVBox Fork Repository:" >> "${CREDITS_FILE}"
+echo "  https://github.com/projetotvbox/multitool" >> "${CREDITS_FILE}"
+echo "===========================================================================" >> "${CREDITS_FILE}"
+echo "" >> "${CREDITS_FILE}"
+
+# 2. NOW, append the original license content to the END of your modified header.
+echo "Original license text follows:" >> "${CREDITS_FILE}"
+echo "--------------------------------" >> "${CREDITS_FILE}"
+echo "" >> "${CREDITS_FILE}"
+
+cat "${TEMP_DIR}/LICENSE" >> "${CREDITS_FILE}"
+
+# =============================================================
+
 run_logged_to_file "${TEMP_DIR}/CHANGELOG" git log --no-merges --pretty="%as: %s"
 
 if [ $? -ne 0 ]; then
@@ -799,6 +1156,64 @@ run_logged mkdir -p "${TEMP_DIR}/bsp"
 if [ $? -ne 0 ]; then
 
 	show_error "Could not create bsp directory"
+
+fi
+
+if [ -n "$EMBEDDED_IMAGE" ]; then
+
+    # If an embedded image was selected in the interactive flow, copy it into
+    # the NTFS backups directory so it is available on first boot.
+    show_wait "Copying embedded image into backup directory..."
+
+    # Keep only the filename for storage in backup folder and in auto-restore
+    # metadata; this avoids persisting host absolute paths inside the image.
+    EMBEDDED_IMAGE_BASENAME="$(basename "$EMBEDDED_IMAGE")"
+
+    # Final destination inside the mounted NTFS partition.
+    EMBEDDED_DEST="${TEMP_DIR}/backups/${EMBEDDED_IMAGE_BASENAME}"
+    log_vars "embedded-image-copy" "source=$EMBEDDED_IMAGE dest=$EMBEDDED_DEST auto_restore_enabled=$AUTO_RESTORE_ENABLED"
+
+    run_logged cp "$EMBEDDED_IMAGE" "${EMBEDDED_DEST}"
+
+    if [ $? -ne 0 ]; then
+
+        show_error "Could not copy embedded image to backup directory"
+
+    fi
+
+    if [ "$AUTO_RESTORE_ENABLED" -eq 0 ]; then
+
+        # Auto-restore enabled means we must pre-create auto_restore.flag with
+        # the selected filename plus checksum payload for integrity validation
+        # during Multitool startup.
+        show_wait "Calculating checksum of the selected backup file, please wait..."
+
+        CHECKSUM_DATA=$(generate_checksum "$EMBEDDED_DEST")
+
+        if [ -z "$CHECKSUM_DATA" ]; then
+
+            log_write "ERROR" "checksum generation failed for embedded image: $EMBEDDED_DEST"
+            show_error "Could not generate checksum data for auto-restore"
+
+        fi
+
+        # Persist auto-restore metadata:
+        # line 1 -> backup filename
+        # line 2+ -> checksum data returned by generate_checksum
+        run_logged_to_file "${TEMP_DIR}/auto_restore.flag" printf "%s\n%s" "$EMBEDDED_IMAGE_BASENAME" "$CHECKSUM_DATA"
+
+        if [ $? -ne 0 ]; then
+
+            log_write "ERROR" "failed to persist auto_restore.flag for embedded image"
+            show_error "Could not write auto_restore.flag"
+
+        else
+
+            log_write "INFO" "auto_restore.flag generated for embedded image $EMBEDDED_IMAGE_BASENAME"
+
+        fi
+
+    fi
 
 fi
 
