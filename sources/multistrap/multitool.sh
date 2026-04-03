@@ -8,7 +8,7 @@ else
 	TTY_CONSOLE="/dev/tty$(fgconsole)"
 fi
 
-BACKTITLE="TVBox Project - IFSP Salto | Multitool by Paolo Sabatino | Modified by Pedro Rigolin for TVBox project"
+BACKTITLE="TVBox Project - IFSP Salto | Multitool by Paolo Sabatino | Modified by Pedro Rigolin for TVBox Project"
 TITLE_MAIN_MENU="Multitool Menu"
 
 ISSUE="unknown" # Will be read later from /mnt/ISSUE
@@ -362,6 +362,12 @@ function inform_wait() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: show_wait
+# Description: Shows a non-blocking wait/progress dialog with optional sizing.
+# Parameters: $1=message, $2=optional_height, $3=optional_width
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function show_wait() {
 
     local TEXT="$1"
@@ -375,6 +381,12 @@ function show_wait() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: show_warning
+# Description: Shows a warning dialog with bold/orange title formatting.
+# Parameters: $1=message, $2=optional_height, $3=optional_width
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function show_warning() {
 
     local TEXT="$1"
@@ -389,6 +401,12 @@ function show_warning() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: show_error
+# Description: Shows an error dialog with bold/red title formatting.
+# Parameters: $1=message, $2=optional_height, $3=optional_width
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function show_error() {
 
     local TEXT="$1"
@@ -403,6 +421,12 @@ function show_error() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: show_info
+# Description: Shows an informational dialog with bold/blue title formatting.
+# Parameters: $1=message, $2=optional_height, $3=optional_width
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function show_info() {
 
     local TEXT="$1"
@@ -417,6 +441,12 @@ function show_info() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: show_success
+# Description: Shows a success dialog with bold/green title formatting.
+# Parameters: $1=message, $2=optional_height, $3=optional_width
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function show_success() {
 
     local TEXT="$1"
@@ -606,6 +636,14 @@ function do_restore() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: generate_checksum
+# Description: Builds checksum metadata payload for auto-restore validation.
+# Strategy: full SHA256 for small files, sampled hashes for larger files.
+# Parameters: $1=file_path
+# Returns: newline-delimited checksum payload
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function generate_checksum() {
 
     local FILE="$1"
@@ -641,6 +679,13 @@ function generate_checksum() {
 
 }
 
+#------------------------------------------------------------------------------
+# Function: verify_checksum
+# Description: Validates a backup file against stored checksum metadata payload.
+# Parameters: $1=file_path, $2=checksum_payload
+# Returns: 0=valid, 1=invalid
+# Author: Pedro Rigolin
+#------------------------------------------------------------------------------
 function verify_checksum() {
 
     local FILE="$1"
@@ -898,8 +943,32 @@ function set_auto_restore() {
 
         local CHECKSUM_DATA=$(generate_checksum "$RESTORE_SOURCE")
 
+        if [ -z "$CHECKSUM_DATA" ]; then
+
+            show_error "There has been an error calculating checksum metadata, auto-restore cannot be set"
+
+            # Ensure data is written and unmount the partition
+            sync
+            unmount_mt_partition
+
+            return 1
+
+        fi        
+
         # Write the selected backup filename to the flag file
         printf "%s\n%s" "$BACKUP_FILENAME" "$CHECKSUM_DATA" > "${MOUNT_POINT}/auto_restore.flag"
+
+        if [ $? -ne 0 ]; then
+
+            show_error "There has been an error writing the auto-restore flag file, auto-restore cannot be set"
+            
+            # Ensure data is written and unmount the partition
+            sync
+            unmount_mt_partition
+
+            return 1
+
+        fi
 
         show_success "Auto-restore set to: $BACKUP_FILENAME\n\nIt will be restored on the next boot."
 
@@ -942,17 +1011,17 @@ function do_auto_restore() {
 
     if [ ! -f "${MOUNT_POINT}/auto_restore.flag" ]; then
         
+        show_error "No auto-restore file is defined, auto-restore cannot continue" 8
+
         # Ensure data is written and unmount the partition
         sync
         unmount_mt_partition
         
-        # No auto-restore file, nothing to do
-        return 0
+        return 1
     
     fi
 
     local BACKUP_FILENAME=$(sed -n '1p' "${MOUNT_POINT}/auto_restore.flag")
-    local BACKUP_FILE_SHA256=$(sed -n '2p' "${MOUNT_POINT}/auto_restore.flag")    
 
     if [ -z "$BACKUP_FILENAME" ]; then
 
@@ -962,8 +1031,7 @@ function do_auto_restore() {
         sync
         unmount_mt_partition
         
-        # No auto-restore file, nothing to do
-        return 0
+        return 1
 
     fi
 
@@ -1775,8 +1843,10 @@ TARGET_CONF=$(</mnt/TARGET)
 
 BACKTITLE="$BACKTITLE - Platform: $TARGET_CONF - Build: $ISSUE"
 
-# Show the credits, that can be hold by the user to read them carefull
-# or it can be agreed and closed, or it can be timed out after 5 seconds
+# Show a short license-agreement prompt at startup.
+# - "I Agree" continues immediately.
+# - "See License" opens the full CREDITS text.
+# - Timeout also continues automatically after 5 seconds.
 dialog --backtitle "$BACKTITLE" \
        --colors \
        --title " ${BOLD}License Agreement${RESET} " \
@@ -1787,8 +1857,8 @@ dialog --backtitle "$BACKTITLE" \
 
 EXIT_CODE=$?
 
-# If the user pressed cancel (hold), we show the credits again and wait for her
-# to press ok
+# If the user selected "See License", open the full credits/license text
+# and let the user return using the "I Agree" exit label.
 if [ "$EXIT_CODE" -eq 1 ]; then
 
     dialog --backtitle "$BACKTITLE" \
@@ -1803,19 +1873,19 @@ find_mmc_devices
 # Detect special devices (NAND, SPI, etc)
 find_special_devices
 
-# Store the name of the auto-restore file
+# Path to auto-restore control file on the MULTITOOL partition.
 FLAG_FILE="${MOUNT_POINT}/auto_restore.flag"
 
-# Check if the auto-restore flag exists
+# If the control file exists, try to resolve and validate its configured backup.
 if [ -f "$FLAG_FILE" ]; then
 
-    # Read the flag contents and remove whitespace
+    # First line stores the backup filename used for auto-restore.
     FLAG_CONTENTS=$(sed -n '1p' "${FLAG_FILE}")
 
-    # Check if the content is not empty
+    # Continue only when an auto-restore backup name is configured.
     if [ -n "$FLAG_CONTENTS" ]; then
 
-        # Check if the file specified in the flag exists
+        # Resolve expected backup path from flag content.
         RESTORE_FILE="${MOUNT_POINT}/backups/${FLAG_CONTENTS}"
 
         if [ -f "$RESTORE_FILE" ]; then
@@ -1833,7 +1903,8 @@ if [ -f "$FLAG_FILE" ]; then
 
                 EXIT_CODE=$?
 
-                # If the exit code is 1 (user pressed "Cancel"), do nothing.
+                # Proceed on timeout or explicit "Proceed".
+                # Only "Cancel" (exit code 1) blocks auto-restore.
                 if [ "$EXIT_CODE" -ne 1 ]; then
 
                     do_auto_restore
@@ -1850,7 +1921,7 @@ if [ -f "$FLAG_FILE" ]; then
 
     fi
 
-# If the flag file does not exist, create it
+# If control file does not exist, create an empty one for next boots.
 else
 
     # Create an empty flag file

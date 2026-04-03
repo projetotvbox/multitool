@@ -817,17 +817,23 @@ if [ ! -f "$DIST_PATH/root.img" ]; then
 
 fi
 
-ROOTFS_SIZE=$(du "$DIST_PATH/root.img" | cut -f 1)
-log_write "RAW" "rootfs_size_kb=$ROOTFS_SIZE"
-ROOTFS_SECTORS_RAW=$(($ROOTFS_SIZE * 2))
-ROOTFS_SECTORS=$(round_sectors $ROOTFS_SECTORS_RAW)
-log_vars "rootfs" "rootfs_size_kb=$ROOTFS_SIZE rootfs_sectors_raw=$ROOTFS_SECTORS_RAW rootfs_sectors_rounded=$ROOTFS_SECTORS"
+ROOTFS_SIZE=$(du -k "$DIST_PATH/root.img" 2>/dev/null | awk '{print $1}')
 
-if [ $? -ne 0 ]; then
-
+# Validate size right after collection (must be a positive integer).
+if [[ ! "$ROOTFS_SIZE" =~ ^[0-9]+$ ]] || [ "$ROOTFS_SIZE" -le 0 ]; then
     show_error "Could not determine size of squashfs root filesystem"
-
 fi
+
+ROOTFS_SECTORS_RAW=$((ROOTFS_SIZE * 2))
+ROOTFS_SECTORS=$(round_sectors "$ROOTFS_SECTORS_RAW")
+
+# Validate rounded sectors as well (defensive check).
+if [[ ! "$ROOTFS_SECTORS" =~ ^[0-9]+$ ]] || [ "$ROOTFS_SECTORS" -le 0 ]; then
+    show_error "Could not calculate rootfs sectors"
+fi
+
+log_vars "rootfs" "rootfs_size_kb=$ROOTFS_SIZE rootfs_sectors_raw=$ROOTFS_SECTORS_RAW rootfs_sectors_rounded=$ROOTFS_SECTORS"
+log_write "RAW" "rootfs_size_kb=$ROOTFS_SIZE"
 
 cd "$CWD"
 
@@ -1200,7 +1206,8 @@ if [ -n "$EMBEDDED_IMAGE" ]; then
         # Persist auto-restore metadata:
         # line 1 -> backup filename
         # line 2+ -> checksum data returned by generate_checksum
-        run_logged_to_file "${TEMP_DIR}/auto_restore.flag" printf "%s\n%s" "$EMBEDDED_IMAGE_BASENAME" "$CHECKSUM_DATA"
+        { printf "%s\n" "$EMBEDDED_IMAGE_BASENAME"; printf "%s" "$CHECKSUM_DATA"; } > "${TEMP_DIR}/auto_restore.flag"
+        log_write "INFO" "auto_restore.flag written for embedded image $EMBEDDED_IMAGE_BASENAME"
 
         if [ $? -ne 0 ]; then
 
@@ -1240,12 +1247,6 @@ if [ $? -ne 0 ]; then
 fi
 
 show_wait "Mounting FAT32 partition..."
-
-if [ $? -ne 0 ]; then
-
-	show_error "Could not create temporary directory"
-
-fi
 
 mount_device "$FAT_PARTITION" "$TEMP_DIR"
 
