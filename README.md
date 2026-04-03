@@ -1,8 +1,8 @@
 # 📺 Projeto TVBox – IFSP Salto | Multitool Fork
 
-[![Shell Script](https://img.shields.io/badge/Shell_Script-Bash-green.svg)](https://www.gnu.org/software/bash/)
-[![Version](https://img.shields.io/badge/Version-1.0.0-green.svg)](https://github.com/projetotvbox/multitool/releases)
-![Views](https://komarev.com/ghpvc/?username=pedrohrigolin&color=0A66C2&style=flat-square)
+[![Shell Script](https://img.shields.io/badge/Shell_Script-Bash-2E7D32?logo=gnu-bash&logoColor=white&style=flat-square)](https://www.gnu.org/software/bash/)
+[![Version](https://img.shields.io/badge/Version-1.0.0-1565C0?style=flat-square)](https://github.com/projetotvbox/multitool/releases)
+[![views](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fprojetotvbox%2Fmultitool&count_bg=%230A66C2&title_bg=%23555555&icon=github.svg&icon_color=%23FFFFFF&title=views)](https://hits.seeyoufarm.com)
 
 > **Language / Idioma:** [English](README.en.md) | **[🟢 Português]**
 
