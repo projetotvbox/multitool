@@ -726,7 +726,7 @@ while true; do
             if [ $? -ne 0 ]; then
 
                 log_write "WARNING" "invalid embedded image selected: $EMBEDDED_IMAGE"
-                show_error "The selected file is not a valid gz file"
+                show_warning "The selected file is not a valid gz file"
 
                 EMBEDDED_IMAGE=""
 
