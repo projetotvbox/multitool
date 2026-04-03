@@ -17,6 +17,9 @@ TARGET_CONF="unknown" # Will be read later from /mnt/TARGET
 # Taken from https://stackoverflow.com/questions/5947742/how-to-change-the-output-color-of-echo-in-linux
 BOLD="\Zb"
 RED="\Z1"
+GREEN="\Z2"
+ORANGE="\Z3"
+BLUE="\Z4"
 NC="\Z0"
 RESET="\Zn"
 
@@ -101,7 +104,8 @@ function find_special_devices() {
         dialog --colors \
             --timeout 5 \
             --backtitle "$BACKTITLE" \
-            --msgbox "$RKNAND_WARNING" 12 74
+            --title " ${BOLD}${ORANGE}Warning${RESET} " \
+            --msgbox "\n$RKNAND_WARNING" 12 74
 
         SYS_RKNAND_DEVICE=$(realpath /sys/block/rknand0/device)
         DEVICES_MMC+=($SYS_RKNAND_DEVICE)
@@ -278,7 +282,7 @@ function choose_mmc_device() {
         fi
     done
 
-    MENU_CMD=(dialog --backtitle "$BACKTITLE" --title "$TITLE" --menu "$MENU_TITLE" 24 74 18)
+    MENU_CMD=(dialog --colors --backtitle "$BACKTITLE" --title " ${BOLD}${TITLE}${RESET} " --menu "$MENU_TITLE" 24 74 18)
 
     CHOICE=$("${MENU_CMD[@]}" "${ARR_DEVICES[@]}" 2>&1 >$TTY_CONSOLE)
 
@@ -314,7 +318,7 @@ function choose_file() {
                 COUNTER=$(($COUNTER + 1))
         done
 
-    MENU_CMD=(dialog --backtitle "$BACKTITLE" --title "$TITLE" --menu "$MENU_TITLE" 24 0 18)
+    MENU_CMD=(dialog --colors --backtitle "$BACKTITLE" --title " ${BOLD}${TITLE}${RESET} " --menu "$MENU_TITLE" 24 0 18)
 
     CHOICE=$("${MENU_CMD[@]}" "${STR_FILES[@]}" 2>&1 >$TTY_CONSOLE)
 
@@ -333,11 +337,13 @@ function choose_file() {
 # First argument is the text
 function inform() {
     
-    TEXT=$1
+    local TEXT="$1"
+    local HEIGHT="${2:-12}"
+    local WIDTH="${3:-74}"
 
     dialog --colors \
         --backtitle "$BACKTITLE" \
-        --infobox "$TEXT" 12 74
+        --infobox "$TEXT" $HEIGHT $WIDTH
 
 }
 
@@ -346,11 +352,82 @@ function inform() {
 # First argument is the text
 function inform_wait() {
 
-    TEXT=$1
+    local TEXT="$1"
+    local HEIGHT="${2:-12}"
+    local WIDTH="${3:-74}"
 
     dialog --colors \
         --backtitle "$BACKTITLE" \
-        --msgbox "$TEXT" 12 74
+        --msgbox "$TEXT" $HEIGHT $WIDTH
+
+}
+
+function show_wait() {
+
+    local TEXT="$1"
+    local HEIGHT="${2:-12}"
+    local WIDTH="${3:-74}"
+
+    dialog --colors \
+        --backtitle "$BACKTITLE" \
+        --title " ${BOLD}Wait${RESET} " \
+        --infobox "\n$TEXT" $HEIGHT $WIDTH
+
+}
+
+function show_warning() {
+
+    local TEXT="$1"
+    local HEIGHT="${2:-12}"
+    local WIDTH="${3:-74}"
+
+    dialog --colors \
+        --backtitle "$BACKTITLE" \
+        --title " ${BOLD}${ORANGE}Warning${RESET} " \
+        --ok-label "OK" \
+        --msgbox "\n$TEXT" $HEIGHT $WIDTH
+
+}
+
+function show_error() {
+
+    local TEXT="$1"
+    local HEIGHT="${2:-12}"
+    local WIDTH="${3:-74}"
+
+    dialog --colors \
+        --backtitle "$BACKTITLE" \
+        --title " ${BOLD}${RED}Error${RESET} " \
+        --ok-label "OK" \
+        --msgbox "\n$TEXT" $HEIGHT $WIDTH
+
+}
+
+function show_info() {
+
+    local TEXT="$1"
+    local HEIGHT="${2:-12}"
+    local WIDTH="${3:-74}"
+
+    dialog --colors \
+        --backtitle "$BACKTITLE" \
+        --title " ${BOLD}${BLUE}Info${RESET} " \
+        --ok-label "OK" \
+        --msgbox "\n$TEXT" $HEIGHT $WIDTH
+
+}
+
+function show_success() {
+
+    local TEXT="$1"
+    local HEIGHT="${2:-12}"
+    local WIDTH="${3:-74}"
+
+    dialog --colors \
+        --backtitle "$BACKTITLE" \
+        --title " ${BOLD}${GREEN}Success${RESET} " \
+        --ok-label "OK" \
+        --msgbox "\n$TEXT" $HEIGHT $WIDTH
 
 }
 
@@ -384,7 +461,7 @@ function do_backup() {
     DEVICE_NAME=$(echo $BASENAME | cut -d ":" -f 1)
 
     # Ask the user the backup filename
-    BACKUP_FILENAME=$(dialog --backtitle "$BACKTITLE" --title "Backup flash" --inputbox "Enter the backup filename" 6 60 "tvbox-backup" 2>&1 >$TTY_CONSOLE)
+    BACKUP_FILENAME=$(dialog --colors --backtitle "$BACKTITLE" --title " ${BOLD}Backup flash${RESET} " --inputbox "Enter the backup filename" 6 60 "tvbox-backup" 2>&1 >$TTY_CONSOLE)
 
     if [ $? -ne 0 ]; then
         return 2 # User cancelled
@@ -412,8 +489,8 @@ function do_backup() {
 
     # Check if the file proposed by the user does already exist
     if [ -e "$BACKUP_PATH" ]; then
-        dialog --backtitle "$BACKTITLE" \
-            --title ="Backup flash" \
+        dialog --colors --backtitle "$BACKTITLE" \
+            --title " ${BOLD}Backup flash${RESET} " \
             --yesno "A backup file with the same name already exists, do you want to proceed to overwrite it?" 7 60
 
         if [ $? -ne 0 ]; then
@@ -426,8 +503,10 @@ function do_backup() {
     set_led_state "$DEVICE_NAME"
 
     (pv -n "/dev/$BLK_DEVICE" | pigz | dd of="$BACKUP_PATH" iflag=fullblock oflag=direct bs=512k 2>/dev/null) 2>&1 | dialog \
+        --colors \
         --backtitle "$BACKTITLE" \
-        --gauge "Backup of device $BLK_DEVICE is in progress, please wait..." 10 70 0
+        --title " ${BOLD}Wait${RESET} " \
+        --gauge "\nBackup of device $BLK_DEVICE is in progress, please wait..." 10 70 0
 
     ERR=$?
 
@@ -506,8 +585,10 @@ function do_restore() {
     set_led_state "$DEVICE_NAME"
 
     (dd if="$RESTORE_SOURCE" bs=256K | pigz -d | pv -n -s ${DEVICE_SIZE}K | dd of="/dev/$BLK_DEVICE" bs=512K iflag=fullblock oflag=direct 2>/dev/null) 2>&1 | dialog \
+        --colors \
         --backtitle "$BACKTITLE" \
-        --gauge "Restore of backup $BASENAME to device $BLK_DEVICE in progress, please wait..." 10 70 0
+        --title " ${BOLD}Wait${RESET} " \
+        --gauge "\nRestore of backup $BASENAME to device $BLK_DEVICE in progress, please wait..." 10 70 0
 
     ERR=$?
 
@@ -522,6 +603,89 @@ function do_restore() {
     inform_wait "Backup restored to device $BLK_DEVICE"
 
     return 0
+
+}
+
+function generate_checksum() {
+
+    local FILE="$1"
+    local FILE_SIZE=$(stat -c%s "$FILE")
+    local FILE_SIZE_MB=$(( $FILE_SIZE / 1048576 ))
+
+    # Full checksum for files under 500MB
+    if [ $FILE_SIZE_MB -lt 500 ]; then
+
+        local MODE="full"
+        local FULL_HASH=$(sha256sum "$FILE" | awk '{print $1}')
+
+        printf "%s\n%s\n%s" "$FILE_SIZE" "$MODE" "$FULL_HASH"
+        return 0
+
+    fi
+
+    # Partial checksum for files 500MB and above
+    local MODE="partial"
+    local SAMPLE_MB=100
+
+    # For very large files (>3GB), increase sample size
+    [ $FILE_SIZE_MB -gt 3072 ] && SAMPLE_MB=200
+
+    local MID_OFFSET=$(( ($FILE_SIZE_MB / 2) - ($SAMPLE_MB / 2) ))
+
+    local HEAD_HASH=$(head -c ${SAMPLE_MB}M "$FILE" | sha256sum | awk '{print $1}')
+    local TAIL_HASH=$(tail -c ${SAMPLE_MB}M "$FILE" | sha256sum | awk '{print $1}')
+    local MID_HASH=$(dd if="$FILE" bs=1M skip=$MID_OFFSET count=$SAMPLE_MB 2>/dev/null | sha256sum | awk '{print $1}')
+
+    printf "%s\n%s\n%s\n%s\n%s\n%s" "$FILE_SIZE" "$MODE" "$SAMPLE_MB" "$HEAD_HASH" "$TAIL_HASH" "$MID_HASH"
+    return 0
+
+}
+
+function verify_checksum() {
+
+    local FILE="$1"
+    local CHECKSUM_DATA="$2"  # conteúdo da flag a partir da linha 3
+
+    local FILE_SIZE=$(stat -c%s "$FILE")
+    local STORED_SIZE=$(echo "$CHECKSUM_DATA" | sed -n '1p')
+    local MODE=$(echo "$CHECKSUM_DATA" | sed -n '2p')
+
+    # Size mismatch — fast fail
+    if [ "$FILE_SIZE" != "$STORED_SIZE" ]; then
+        return 1
+    fi
+
+    if [ "$MODE" = "full" ]; then
+
+        local STORED_HASH=$(echo "$CHECKSUM_DATA" | sed -n '3p')
+        local COMPUTED_HASH=$(sha256sum "$FILE" | awk '{print $1}')
+
+        [ "$STORED_HASH" = "$COMPUTED_HASH" ] && return 0 || return 1
+
+    elif [ "$MODE" = "partial" ]; then
+
+        local SAMPLE_MB=$(echo "$CHECKSUM_DATA" | sed -n '3p')
+        local STORED_HEAD=$(echo "$CHECKSUM_DATA" | sed -n '4p')
+        local STORED_TAIL=$(echo "$CHECKSUM_DATA" | sed -n '5p')
+        local STORED_MID=$(echo "$CHECKSUM_DATA" | sed -n '6p')
+
+        local FILE_SIZE_MB=$(( $FILE_SIZE / 1048576 ))
+        local MID_OFFSET=$(( ($FILE_SIZE_MB / 2) - ($SAMPLE_MB / 2) ))
+
+        local HEAD_HASH=$(head -c ${SAMPLE_MB}M "$FILE" | sha256sum | awk '{print $1}')
+        [ "$STORED_HEAD" != "$HEAD_HASH" ] && return 1
+
+        local TAIL_HASH=$(tail -c ${SAMPLE_MB}M "$FILE" | sha256sum | awk '{print $1}')
+        [ "$STORED_TAIL" != "$TAIL_HASH" ] && return 1
+
+        local MID_HASH=$(dd if="$FILE" bs=1M skip=$MID_OFFSET count=$SAMPLE_MB 2>/dev/null | sha256sum | awk '{print $1}')
+        [ "$STORED_MID" != "$MID_HASH" ] && return 1
+
+        return 0
+
+    fi
+
+    return 1
 
 }
 
@@ -540,7 +704,7 @@ function show_current_auto_restore() {
 
     if [ $? -ne 0 ]; then
 
-        inform_wait "\nThere has been an error mounting the MULTITOOL partition, process cannot continue"
+        show_error "There has been an error mounting the MULTITOOL partition, process cannot continue" 8
         
         # Ensure data is written and unmount the partition
         sync
@@ -560,22 +724,29 @@ function show_current_auto_restore() {
     fi
 
     # Read the contents of the flag file
-    local FLAG_CONTENTS=$(cat "$FLAG_FILE" | xargs)
+    local FLAG_CONTENTS=$(sed -n '1p' "$FLAG_FILE")
 
     # Display appropriate dialog based on flag contents
     if [ -z "$FLAG_CONTENTS" ]; then
 
-        dialog --backtitle "$BACKTITLE" \
-            --title "Current Auto-Restore" \
+        dialog --colors --backtitle "$BACKTITLE" \
+            --title " ${BOLD}Current Auto-Restore${RESET} " \
             --ok-label "OK" \
-            --msgbox "\n\nNo Auto-Restore file is defined." 10 60
+            --msgbox "\nNo Auto-Restore file is defined." 8 50
 
     else
 
-        dialog --backtitle "$BACKTITLE" \
-            --title "Current Auto-Restore" \
+        local CHECKSUM_MODE=$(sed -n '3p' "$FLAG_FILE")
+        local STORED_SIZE=$(sed -n '2p' "$FLAG_FILE")
+        local STORED_SIZE_MB=$(( $STORED_SIZE / 1048576 ))
+        local FILE_EXISTS="Yes"
+        [ ! -f "${MOUNT_POINT}/backups/${FLAG_CONTENTS}" ] && FILE_EXISTS="No"
+
+        dialog --colors \
+            --backtitle "$BACKTITLE" \
+            --title " ${BOLD}Current Auto-Restore${RESET} " \
             --ok-label "OK" \
-            --msgbox "\nAuto-Restore file is set to:\n\n${FLAG_CONTENTS}" 10 60
+            --msgbox "\nAuto-Restore file is set to:\n\n${BOLD}File:${RESET} ${FLAG_CONTENTS}\n\n${BOLD}Size:${RESET} ${STORED_SIZE_MB} MB\n\n${BOLD}Checksum mode:${RESET} ${CHECKSUM_MODE}\n\n${BOLD}File exists:${RESET} ${FILE_EXISTS}" 17 74
 
     fi
 
@@ -606,7 +777,7 @@ function set_auto_restore() {
 
     if [ $? -ne 0 ]; then
 
-        inform_wait "There has been an error mounting the MULTITOOL partition, process cannot continue"
+        show_error "There has been an error mounting the MULTITOOL partition, process cannot continue" 8
         
         # Ensure data is written and unmount the partition
         sync
@@ -634,7 +805,7 @@ function set_auto_restore() {
 
     fi
 
-    local FLAG_CONTENTS=$(cat "$FLAG_FILE" | xargs)
+    local FLAG_CONTENTS=$(sed -n '1p' "$FLAG_FILE")
 
     if [ -n "$FLAG_CONTENTS" ]; then
 
@@ -663,7 +834,7 @@ function set_auto_restore() {
 
     if [ ${#STR_FILES[@]} -eq 0 ]; then
 
-        inform_wait "No backup images found in the multitool partition and no auto-restore file is defined.\n\nPlease add .gz files to enable auto-restore."
+        show_info "No backup images found in the multitool partition and no auto-restore file is defined.\n\nPlease add .gz files to enable auto-restore." 10 60
         
         # Ensure data is written and unmount the partition
         sync
@@ -678,7 +849,7 @@ function set_auto_restore() {
 
     local MENU_TITLE="Choose a backup image for next boot or Unset"
 
-    local MENU_CMD=(dialog --backtitle "$BACKTITLE" --title "$TITLE" --menu "\n$MENU_TITLE" 24 0 18)
+    local MENU_CMD=(dialog --colors --backtitle "$BACKTITLE" --title " ${BOLD}${TITLE}${RESET} " --menu "\n$MENU_TITLE" 24 0 18)
 
     # Display the menu and capture user choice
     CHOICE=$("${MENU_CMD[@]}" "${STR_FILES[@]}" 2>&1 >$TTY_CONSOLE)
@@ -700,7 +871,7 @@ function set_auto_restore() {
         # Clear the auto-restore configuration
         echo -n "" > "${MOUNT_POINT}/auto_restore.flag"
 
-        inform_wait "Auto-restore has been UNSET.\n\nThe flag file is now empty."
+        show_success "Auto-restore has been UNSET.\n\nThe flag file is now empty." 10 60
 
     else
 
@@ -713,7 +884,7 @@ function set_auto_restore() {
 
         if [ "$BACKUP_FILE_FORMAT" != "gzip" ]; then
 
-            inform_wait "The selected file (${BACKUP_FILENAME}) is not in gzip format, auto-restore cannot be set"
+            show_error "The selected file (${BACKUP_FILENAME}) is not in gzip format, auto-restore cannot be set"
             
             # Ensure data is written and unmount the partition
             sync
@@ -723,14 +894,14 @@ function set_auto_restore() {
 
         fi
 
-        inform "\nCalculating checksum of the selected backup file, please wait..."
+        show_wait "Calculating checksum of the selected backup file, please wait..." 8
 
-        local BACKUP_FILE_SHA256=$(sha256sum "$RESTORE_SOURCE" | awk '{print $1}')
+        local CHECKSUM_DATA=$(generate_checksum "$RESTORE_SOURCE")
 
         # Write the selected backup filename to the flag file
-        printf "%s\n%s" "$BACKUP_FILENAME" "$BACKUP_FILE_SHA256" > "${MOUNT_POINT}/auto_restore.flag"
+        printf "%s\n%s" "$BACKUP_FILENAME" "$CHECKSUM_DATA" > "${MOUNT_POINT}/auto_restore.flag"
 
-        inform_wait "Auto-restore set to: $BACKUP_FILENAME\n\nIt will be restored on the next boot."
+        show_success "Auto-restore set to: $BACKUP_FILENAME\n\nIt will be restored on the next boot."
 
     fi
 
@@ -752,14 +923,14 @@ function set_auto_restore() {
 # @return 0 on success, 1 on error, 3 if no suitable device
 function do_auto_restore() {
 
-    inform "\nInitializing automatic restore process, please wait..."
+    show_wait "Initializing automatic restore process, please wait..." 8
 
     # Mount the multitool partition
     mount_mt_partition
 
     if [ $? -ne 0 ]; then
 
-        inform_wait "There has been an error mounting the MULTITOOL partition, auto-restore cannot continue"
+        show_error "There has been an error mounting the MULTITOOL partition, auto-restore cannot continue" 8
         
         # Ensure data is written and unmount the partition
         sync
@@ -780,14 +951,12 @@ function do_auto_restore() {
     
     fi
 
-    # BACKUP_FILENAME=$(cat "${MOUNT_POINT}/auto_restore.flag" | xargs)
-
     local BACKUP_FILENAME=$(sed -n '1p' "${MOUNT_POINT}/auto_restore.flag")
     local BACKUP_FILE_SHA256=$(sed -n '2p' "${MOUNT_POINT}/auto_restore.flag")    
 
     if [ -z "$BACKUP_FILENAME" ]; then
 
-        inform_wait "No auto-restore file is defined, auto-restore cannot continue"
+        show_error "No auto-restore file is defined, auto-restore cannot continue" 8
         
         # Ensure data is written and unmount the partition
         sync
@@ -800,7 +969,7 @@ function do_auto_restore() {
 
     if [ ! -f "${MOUNT_POINT}/backups/${BACKUP_FILENAME}" ]; then
 
-        inform_wait "The auto-restore file (${BACKUP_FILENAME}) does not exist, auto-restore cannot continue"
+        show_error "The auto-restore file (${BACKUP_FILENAME}) does not exist, auto-restore cannot continue"
         
         # Ensure data is written and unmount the partition
         sync
@@ -814,7 +983,7 @@ function do_auto_restore() {
 
     if [ "$BACKUP_FILE_FORMAT" != "gzip" ]; then
 
-        inform_wait "The auto-restore file (${BACKUP_FILENAME}) is not in gzip format, auto-restore cannot continue"
+        show_error "The auto-restore file (${BACKUP_FILENAME}) is not in gzip format, auto-restore cannot continue"
         
         # Ensure data is written and unmount the partition
         sync
@@ -824,13 +993,16 @@ function do_auto_restore() {
 
     fi
 
-    local TARGET_BACKUP_SHA256=$(sha256sum "${MOUNT_POINT}/backups/${BACKUP_FILENAME}" | awk '{print $1}')
+    local CHECKSUM_DATA=$(sed -n '2,$p' "${MOUNT_POINT}/auto_restore.flag")
 
-    if [ "$BACKUP_FILE_SHA256" != "$TARGET_BACKUP_SHA256" ]; then
+    show_wait "Verifying backup integrity, please wait..." 8
 
-        inform_wait "The auto-restore file (${BACKUP_FILENAME}) checksum does not match the expected value, auto-restore cannot continue"
-        
-        # Ensure data is written and unmount the partition
+    verify_checksum "${MOUNT_POINT}/backups/${BACKUP_FILENAME}" "$CHECKSUM_DATA"
+
+    if [ $? -ne 0 ]; then
+
+        show_error "The auto-restore file (${BACKUP_FILENAME}) checksum does not match the expected value, auto-restore cannot continue"
+
         sync
         unmount_mt_partition
 
@@ -845,7 +1017,7 @@ function do_auto_restore() {
     # Verify there is at least one suitable device
     if [ ${#DEVICES_MMC[@]} -eq 0 ]; then
 
-        inform_wait "There are no eMMC devices suitable for auto-restore"
+        show_error "There are no eMMC devices suitable for auto-restore" 8
 
         # Ensure data is written and unmount the partition
         sync
@@ -898,8 +1070,10 @@ function do_auto_restore() {
     # Perform the restore operation with progress monitoring
     # Pipeline: read compressed backup -> decompress -> show progress -> write to device
     (dd if="$RESTORE_SOURCE" bs=256K | pigz -d | pv -n -s ${DEVICE_SIZE}K | dd of="/dev/$BLK_DEVICE" bs=512K iflag=fullblock oflag=direct 2>/dev/null) 2>&1 | dialog \
+        --colors \
         --backtitle "$BACKTITLE" \
-        --gauge "Restore of backup $BASENAME to device $BLK_DEVICE in progress, please wait..." 10 70 0
+        --title " ${BOLD}Wait${RESET} " \
+        --gauge "\nRestore of backup $BASENAME to device $BLK_DEVICE in progress, please wait..." 10 70 0
 
     # Capture the exit code from the restore operation
     ERR=$?
@@ -915,7 +1089,7 @@ function do_auto_restore() {
     # Check if the restore operation was successful
     if [ $ERR -ne 0 ]; then
 
-        inform_wait "An error occurred ($ERR) restoring backup, process has not been completed"
+        show_error "An error occurred ($ERR) restoring backup, process has not been completed"
 
         return 1
 
@@ -923,11 +1097,12 @@ function do_auto_restore() {
 
     # Show completion dialog with shutdown options
     dialog --backtitle "$BACKTITLE" \
+        --colors \
         --timeout 10 \
         --yes-label "Shutdown now" \
         --no-label "Shutdown later" \
-        --title "Auto-restore completed!" \
-        --yesno "\nBackup restored to device $BLK_DEVICE\n\nIn 10 seconds the system will shutdown automatically" 10 70
+        --title " ${BOLD}Auto-restore completed!${RESET} " \
+        --yesno "\n${BOLD}${GREEN}Success!${RESET} Backup restored to device $BLK_DEVICE\n\nIn 10 seconds the system will shutdown automatically" 10 70
 
     # Capture the exit code to know the decision
     EXIT_CODE=$?
@@ -1529,7 +1704,7 @@ function do_change_command_rate() {
     CHOICE_ITEMS+=("1T" "1 clock cycle")
     CHOICE_ITEMS+=("2T" "2 clock cycles")
     
-    CHOICE_CMD=(dialog --colors --backtitle "$BACKTITLE" --title "$TITLE" --menu "$MENU_TITLE" 24 74 18)
+    CHOICE_CMD=(dialog --colors --backtitle "$BACKTITLE" --title " ${BOLD}${TITLE}${RESET} " --menu "$MENU_TITLE" 24 74 18)
     
     CHOICE=$("${CHOICE_CMD[@]}" "${CHOICE_ITEMS[@]}" 2>&1 >$TTY_CONSOLE)    
     
@@ -1603,7 +1778,8 @@ BACKTITLE="$BACKTITLE - Platform: $TARGET_CONF - Build: $ISSUE"
 # Show the credits, that can be hold by the user to read them carefull
 # or it can be agreed and closed, or it can be timed out after 5 seconds
 dialog --backtitle "$BACKTITLE" \
-       --title "License Agreement" \
+       --colors \
+       --title " ${BOLD}License Agreement${RESET} " \
        --timeout 5 \
        --yes-label "I Agree" \
        --no-label "See License" \
@@ -1648,11 +1824,11 @@ if [ -f "$FLAG_FILE" ]; then
 
             if [ "$RESTORE_FILE_FORMAT" = "gzip" ]; then
             
-                dialog --backtitle "$BACKTITLE" \
+                dialog --colors --backtitle "$BACKTITLE" \
                     --timeout 10 \
                     --yes-label "Proceed" \
                     --no-label "Cancel" \
-                    --title "Auto-Restore Backup" \
+                    --title " ${BOLD}Auto-Restore Backup${RESET} " \
                     --yesno "\nAn auto-restore operation is configured.\n\nBackup file: $FLAG_CONTENTS\n\nIn 10 seconds the restore will start automatically.\n\nPress 'Cancel' to abort the auto-restore." 15 70
 
                 EXIT_CODE=$?
@@ -1666,7 +1842,7 @@ if [ -f "$FLAG_FILE" ]; then
 
             else
 
-                inform_wait "The auto-restore file ($FLAG_CONTENTS) is not in a valid format. Auto-restore aborted."
+                show_error "The auto-restore file ($FLAG_CONTENTS) is not in a valid format. Auto-restore aborted."
 
             fi
 
@@ -1711,7 +1887,7 @@ MENU_ITEMS+=(B "Reboot")
 
 MENU_ITEMS+=(C "Shutdown")
 
-MENU_CMD=(dialog --backtitle "$BACKTITLE" --title "$TITLE_MAIN_MENU" --menu "Choose an option" 24 74 18)
+MENU_CMD=(dialog --colors --backtitle "$BACKTITLE" --title " ${BOLD}${TITLE_MAIN_MENU}${RESET} " --menu "Choose an option" 24 74 18)
 
 while true; do
 
