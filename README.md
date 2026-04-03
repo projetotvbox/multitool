@@ -2,7 +2,7 @@
 
 [![Shell Script](https://img.shields.io/badge/Shell_Script-Bash-2E7D32?logo=gnu-bash&logoColor=white&style=flat-square)](https://www.gnu.org/software/bash/)
 [![Version](https://img.shields.io/badge/Version-1.0.0-1565C0?style=flat-square)](https://github.com/projetotvbox/multitool/releases)
-[![views](https://hits.sh/github.com/projetotvbox/multitool.svg?style=flat-square&label=views&color=0A66C2)](https://hits.sh/github.com/projetotvbox/multitool/)
+[![Views](https://hits.sh/github.com/projetotvbox/multitool.svg?style=flat-square&label=views&color=0A66C2)](https://hits.sh/github.com/projetotvbox/multitool/)
 
 > **Language / Idioma:** [English](README.en.md) | **[🟢 Português]**
 
