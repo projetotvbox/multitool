@@ -56,7 +56,21 @@ O Multitool é um sistema Linux mínimo que roda diretamente de um cartão SD, p
 
 ---
 
+## 📦 Imagens pré-compiladas
+
+Não quer compilar? As [releases do projeto](https://github.com/projetotvbox/multitool/releases) trazem **versões genéricas já compiladas** da imagem, disponíveis nos **Assets** de cada versão.
+
+1. Acesse a página de [releases](https://github.com/projetotvbox/multitool/releases) e baixe, nos **Assets**, a imagem correspondente ao seu board.
+2. Grave a imagem no cartão SD, como em [Gravando a imagem no cartão SD](#gravando-a-imagem-no-cartão-sd).
+3. Use normalmente, como em [Como usar o Multitool na box](#-como-usar-o-multitool-na-box).
+
+> 💡 As imagens genéricas não vêm com backup embutido nem com auto-restore pré-configurado. Para o fluxo em lote, você pode [compilar a sua](#-como-compilar-a-imagem) com imagem embutida ou [configurar o auto-restore manualmente](#configurando-o-auto-restore-manualmente) pelo menu.
+
+---
+
 ## 🚀 Como compilar a imagem
+
+> Prefere não compilar? Veja as [imagens pré-compiladas](#-imagens-pré-compiladas) nas releases.
 
 ### Pré-requisitos
 
@@ -136,6 +150,7 @@ Caso a imagem não tenha sido compilada com auto-restore, é possível configur�
 
 ## 🔗 Referências
 
+- [Releases deste fork (imagens pré-compiladas)](https://github.com/projetotvbox/multitool/releases)
 - [Repositório original — Paolo Sabatino](https://github.com/paolosabatino/multitool)
 - [Instituto Federal de São Paulo — Campus Salto](https://slt.ifsp.edu.br)
 
